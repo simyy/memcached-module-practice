@@ -18,7 +18,16 @@ make
 
 Memcached event module, contains a worker and some threads, using libevent and pipe.
 
+* libevent
+* pipe
+* threads
+* list
+
 ####memcache_slab
 
 Memecached memory module, contais memory_allocate and delete.
 
+* limit
+* factor
+* slab list
+* split mem

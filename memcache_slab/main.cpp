@@ -4,6 +4,7 @@
  ************************************************************************/
 
 #include <iostream>
+#include <unistd.h>
 
 #include "memcache_slab.h"
 
@@ -13,6 +14,8 @@ int main(int argc, char** argv)
 {
     MemcacheSlab* ms = new MemcacheSlab(1024, 1.25);
     ms->init();
+
+    sleep(20);
 
     delete  ms;
 

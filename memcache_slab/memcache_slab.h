@@ -8,10 +8,16 @@
 #ifndef _MEMCACHE_SLAB_H
 #define _MEMCACHE_SLAB_H
 
-#define POWER_LAGEST 200
+//size of slabclass
+#define POWER_LAGEST 10
 #define POWER_SMALLEST 1
+
+//the max size of item is 2M, and other's size is 2M/(factor^n)
 #define ITEM_MAX_SIZE 2048 
+
 #define MAX_NUMBER_OF_SLAB_CLASSES (POWER_LAGEST+1)
+
+static const int mem_limit = 512*1024*1024;
 
 struct Slab{
    unsigned int size;      //size of a item
@@ -21,8 +27,10 @@ struct Slab{
    unsigned int slabs;     //how many slabs allocated
    unsigned int free_size; //total free items in list
 
-   void *slab_list;       //array of slab pointers
+   void **slab_list;       //array of slab pointers
    unsigned int list_size; //size of prev array
+
+   unsigned int sl_curr; //total free items in list
 };
 
 struct item {
@@ -41,16 +49,19 @@ struct item {
 class MemcacheSlab
 {
 public:
-    //MemcacheSlab(const size_t limit, const double factor);
-    MemcacheSlab(const int limit, const double factor);
+    MemcacheSlab(const int chunk_size, const double factor);
     ~MemcacheSlab();
 
-    void init();
+    /* init slab chunk size and slab factor */
+    void init(int prealloc=0);
 
 protected:
-    int do_slabs_newslab(const unsigned int id);
+    /* enlarge the size of slab */ 
+    int grow_slab_list(const unsigned int id);
 
     void slabs_preallocate(const unsigned int maxslabs);
+
+    int do_slabs_newslab(const unsigned int id);
 
     /* alloc a size item */
     void do_slabs_alloc(const size_t size, const unsigned int id);
@@ -58,10 +69,24 @@ protected:
     /* get the id of slabclass, it's size fit */
     unsigned int slabclass_id(const size_t size);
 
+    /* split the memory of ptr in a slab->slab_list for use in future */
+    void split_slab_page_into_freelist(char *ptr, const unsigned int id);
+
+    /* get the size of memory from ptr, and add it to the list of slab[id] */
+    void do_slabs_free(void *ptr, const size_t size, unsigned int id);
+
+    /* */
+    void* memory_allocate(size_t size);
+
 private:
     int power_largest;
 
-    struct Slab slabclass[POWER_LAGEST];
+    int m_chunk_size;
+    int m_factor;
+
+    void* mem_base;
+
+    struct Slab slabclass[POWER_LAGEST+1];
 
 };
 
