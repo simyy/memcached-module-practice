@@ -24,63 +24,102 @@ MemcacheSlab::MemcacheSlab(const int chunk_size ,const double factor)
 MemcacheSlab::~MemcacheSlab()
 {
     if (mem_base != NULL)
-        free(mem_base);
+        delete mem_base;
     cout<<"delete slabs"<<endl;
 }
 
-void MemcacheSlab::slabs_preallocate(const unsigned int maxslabs)
+void MemcacheSlab::init(int prealloc)
 {
-}
+    int i = POWER_SMALLEST - 1;
+    unsigned int size = sizeof(struct item) + m_chunk_size;
 
-unsigned int MemcacheSlab::slabclass_id(const size_t size)
-{
-    int res = POWER_SMALLEST;
-
-    if (size == 0)
-        return 0;
-
-    while(size > slabclass[res].size) {
-        if (res++ == power_largest)
-            return 0;
+    cout<<"start init slabs ..."<<endl;
+    while (++i < POWER_LAGEST && size <= ITEM_MAX_SIZE / m_factor) {
+        struct Slab* slab = new Slab; 
+        slab->size = size; 
+        slab->perslab = ITEM_MAX_SIZE/size;
+        slab->slabs = 0;
+        slab->sl_curr = 0;
+        slabclass.push_back(slab);
+        size = size * m_factor;
     }
 
-    cout<<"get slab id:\t"<<res<<endl;
+    struct Slab* slab = new Slab; 
+    slab->size = ITEM_MAX_SIZE;
+    slab->perslab = 1;
+    slab->slabs = 0;
+    slab->sl_curr = 0;
+    slabclass.push_back(slab);
 
-    return res;
+    if (prealloc) {
+        mem_base = new char[mem_limit];
+        if (mem_base != NULL) {
+            cout<<"prealloc success ..."<<endl;
+            memset(mem_base, 0, mem_limit);
+        }
+        else
+            cout<<"prealloc failure ..."<<endl;
+    }
 }
 
-int MemcacheSlab::do_slabs_newslab(const unsigned int id)
+int MemcacheSlab::do_item_alloc(char* key, char* data)
 {
-    struct Slab *p = &slabclass[id];
-    int len = p->size * p->perslab;
-    char *ptr = NULL;
 
-    grow_slab_list(id);
+    int len = sizeof(data) + sizeof(key);
+    int id = slabclass_id(len);
+    struct Slab* p = slabclass[id];
 
-    ptr = (char*)memory_allocate((size_t)len);
-    memset(ptr, 0, (size_t)len);
-
-    split_slab_page_into_freelist(ptr, id);
-    p->slab_list[p->slabs++] = (void*)ptr;
+    struct item* m = (struct item*)do_slabs_alloc(len, id);
+    memcpy(m->key, key, sizeof(key));
+    memcpy(m->data, data, sizeof(data));
+    m->next = (struct item*)p->slots;
+    ((struct item*)p->slots)->prev = m;
+    p->slots = m;
+    (p->sl_curr)--;
 
     return 1;
 }
 
-void* MemcacheSlab::memory_allocate(size_t size)
+void* MemcacheSlab::do_slabs_alloc(const size_t size, const unsigned int id)
 {
-    void *ret = NULL;
+    void* ret = NULL;
+    item* it  = NULL;
+    struct Slab *p = slabclass[id];
 
-    ret = malloc(size);
-
-    // if prealloc, must guarantee aligned!!!
-
+    if ((p->sl_curr == 0) && (do_slabs_newslab(id) == 0)) {
+        ret = NULL; 
+    }
+    if (p->sl_curr != 0) {
+        /* return off our freelist */
+        it = (item *)p->slots;
+        p->slots = it->next;
+        if (it->next) it->next->prev = 0;
+        p->sl_curr--;
+        ret = (void *)it;
+    }
     return ret;
 }
 
+int MemcacheSlab::do_slabs_newslab(const unsigned int id)
+{
+    struct Slab *p = slabclass[id];
+    int len = p->size * p->perslab;
+    char *ptr = NULL;
+
+    //grow_slab_list(id);
+
+    ptr = new char(len);
+    memset(ptr, 0, len);
+
+    split_slab_page_into_freelist(ptr, id);
+    (p->slab_list)[p->slabs++] = (void*)ptr;
+
+    return 1;
+}
 
 void MemcacheSlab::split_slab_page_into_freelist(char *ptr, const unsigned int id)
 {
-    struct Slab *p = &slabclass[id];
+    struct Slab *p = slabclass[id];
     for (int i = 0; i < p->perslab; i++) {
         do_slabs_free(ptr, 0, id);
         ptr += p->size;
@@ -89,10 +128,10 @@ void MemcacheSlab::split_slab_page_into_freelist(char *ptr, const unsigned int i
 
 void MemcacheSlab::do_slabs_free(void *ptr, const size_t size, unsigned int id)
 {
-    if (id < POWER_SMALLEST || id > POWER_LAGEST)\
+    if (id < POWER_SMALLEST || id > POWER_LAGEST)
         return;
 
-    struct Slab *p = &slabclass[id];
+    struct Slab *p = slabclass[id];
 
     //maybe judge memmory limit there
 
@@ -103,33 +142,12 @@ void MemcacheSlab::do_slabs_free(void *ptr, const size_t size, unsigned int id)
     if (it->next)
         it->next->prev = it;
     p->slots = it;
-
     p->sl_curr += 1;
-}
-
-
-void MemcacheSlab::do_slabs_alloc(const size_t size, const unsigned int id)
-{
-    void* ret = NULL;
-    item* it  = NULL;
-    struct Slab *p = &slabclass[id];
-
-    //if (!(p->free_size != 0) || (do_slabs_newslab(id) != 0)) {
-    //    return; // xxxx
-    //} else {
-    /* return off our freelist */
-    it = (item *)p->slots;
-    p->slots = it->next;
-    if (it->next) it->next->prev = 0;
-    p->free_size--;
-    ret = (void *)it;
-    //}
-    return;
 }
 
 int MemcacheSlab::grow_slab_list(const unsigned int id)
 {
-    struct Slab* p = &slabclass[id];
+    struct Slab* p = slabclass[id];
     int len = p->size * p->perslab;
 
     if (p->slabs == p->list_size) {
@@ -146,53 +164,19 @@ int MemcacheSlab::grow_slab_list(const unsigned int id)
     return 1;
 }
 
-void MemcacheSlab::init(int prealloc)
+unsigned int MemcacheSlab::slabclass_id(const size_t size)
 {
-    int i = POWER_SMALLEST - 1;
-    unsigned int size = sizeof(item) + m_chunk_size;
+    int res = POWER_SMALLEST;
 
-    cout<<"start init slabs size ..."<<endl;
-    while (++i < POWER_LAGEST && size <= ITEM_MAX_SIZE / m_factor) {
-        slabclass[i].size = size; 
-        slabclass[i].perslab = ITEM_MAX_SIZE/size;
-        slabclass[i].slabs = 0;
-        slabclass[i].free_size = 0;
+    if (size == 0)
+        return 0;
 
-        size = size * m_factor;
+    while(size > slabclass[res]->size) {
+        if (res++ == power_largest)
+            return 0;
     }
 
-    int power_largest = i;
-    slabclass[power_largest].size = ITEM_MAX_SIZE;
-    slabclass[power_largest].perslab = 1;
-    slabclass[power_largest].slabs = 0;
-    slabclass[power_largest].free_size = 0;
+    cout<<"get slab id:\t"<<res<<endl;
 
-    if (prealloc) {
-        mem_base = malloc(mem_limit);
-        if (mem_base != NULL) {
-            cout<<"prealloc success ..."<<endl;
-            memset(mem_base, 0, mem_limit);
-        }
-        else
-            cout<<"prealloc failure ..."<<endl;
-    }
-}
-
-void MemcacheSlab::do_item_alloc(char* key, char* data)
-{
-    struct item* mitem = new struct item;
-    strcpy(mitem->key, key);
-    strcpy(mitem->data, data);
-
-    int len = sizeof(struct item);
-    int id = slabclass_id(sizeof(struct item));
-    struct Slab* p = &slabclass[id];
-
-    if (p->slabs == 0) {
-        do_slabs_newslab(id); 
-    }
-    mitem->next = (struct item*)p->slots;
-    ((struct item*)p->slots)->prev = mitem;
-    p->slots = mitem;
-    (p->free_size)--;
+    return res;
 }

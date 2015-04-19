@@ -15,7 +15,9 @@ int main(int argc, char** argv)
     MemcacheSlab* ms = new MemcacheSlab(1024, 1.25);
     ms->init(0);
 
-    sleep(20);
+    int flag = 0;
+    flag = ms->do_item_alloc("123", "123123");
+    cout<<flag<<endl;
 
     delete  ms;
 
