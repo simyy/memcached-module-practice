@@ -13,7 +13,7 @@ using namespace std;
 int main(int argc, char** argv)
 {
     MemcacheSlab* ms = new MemcacheSlab(1024, 1.25);
-    ms->init();
+    ms->init(0);
 
     sleep(20);
 

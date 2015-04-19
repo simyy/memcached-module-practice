@@ -55,6 +55,8 @@ public:
     /* init slab chunk size and slab factor */
     void init(int prealloc=0);
 
+    /* alloc a item  */
+    void do_item_alloc(char* key, char* data);
 protected:
     /* enlarge the size of slab */ 
     int grow_slab_list(const unsigned int id);

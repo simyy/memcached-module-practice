@@ -114,16 +114,16 @@ void MemcacheSlab::do_slabs_alloc(const size_t size, const unsigned int id)
     item* it  = NULL;
     struct Slab *p = &slabclass[id];
 
-    if (!(p->free_size != 0) || (do_slabs_newslab(id) != 0)) {
-        return; // xxxx
-    } else {
-        /* return off our freelist */
-        it = (item *)p->slots;
-        p->slots = it->next;
-        if (it->next) it->next->prev = 0;
-        p->free_size--;
-        ret = (void *)it;
-    }
+    //if (!(p->free_size != 0) || (do_slabs_newslab(id) != 0)) {
+    //    return; // xxxx
+    //} else {
+    /* return off our freelist */
+    it = (item *)p->slots;
+    p->slots = it->next;
+    if (it->next) it->next->prev = 0;
+    p->free_size--;
+    ret = (void *)it;
+    //}
     return;
 }
 
@@ -155,6 +155,8 @@ void MemcacheSlab::init(int prealloc)
     while (++i < POWER_LAGEST && size <= ITEM_MAX_SIZE / m_factor) {
         slabclass[i].size = size; 
         slabclass[i].perslab = ITEM_MAX_SIZE/size;
+        slabclass[i].slabs = 0;
+        slabclass[i].free_size = 0;
 
         size = size * m_factor;
     }
@@ -162,6 +164,8 @@ void MemcacheSlab::init(int prealloc)
     int power_largest = i;
     slabclass[power_largest].size = ITEM_MAX_SIZE;
     slabclass[power_largest].perslab = 1;
+    slabclass[power_largest].slabs = 0;
+    slabclass[power_largest].free_size = 0;
 
     if (prealloc) {
         mem_base = malloc(mem_limit);
@@ -172,4 +176,23 @@ void MemcacheSlab::init(int prealloc)
         else
             cout<<"prealloc failure ..."<<endl;
     }
+}
+
+void MemcacheSlab::do_item_alloc(char* key, char* data)
+{
+    struct item* mitem = new struct item;
+    strcpy(mitem->key, key);
+    strcpy(mitem->data, data);
+
+    int len = sizeof(struct item);
+    int id = slabclass_id(sizeof(struct item));
+    struct Slab* p = &slabclass[id];
+
+    if (p->slabs == 0) {
+        do_slabs_newslab(id); 
+    }
+    mitem->next = (struct item*)p->slots;
+    ((struct item*)p->slots)->prev = mitem;
+    p->slots = mitem;
+    (p->free_size)--;
 }
