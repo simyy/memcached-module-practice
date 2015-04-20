@@ -62,16 +62,20 @@ void MemcacheSlab::init(int prealloc)
     }
 }
 
-int MemcacheSlab::do_item_alloc(char* key, char* data)
+int MemcacheSlab::do_item_alloc(char* data)
 {
 
-    int len = sizeof(data) + sizeof(key);
+    int len = sizeof(struct item) + strlen(data)+1;
     int id = slabclass_id(len);
     struct Slab* p = slabclass[id];
 
+    cout<<"item\t"<<sizeof(struct item)<<endl;
+    cout<<"data\t"<<strlen(data)<<endl;
+    cout<<"size\t"<<p->size<<endl;
+
     struct item* m = (struct item*)do_slabs_alloc(len, id);
-    memcpy(m->key, key, sizeof(key));
-    memcpy(m->data, data, sizeof(data));
+    memcpy(m->data, data, strlen(data)+1);
+    cout<<"m->data\t"<<m->data<<endl;
     m->next = (struct item*)p->slots;
     ((struct item*)p->slots)->prev = m;
     p->slots = m;
@@ -91,12 +95,15 @@ void* MemcacheSlab::do_slabs_alloc(const size_t size, const unsigned int id)
     }
     if (p->sl_curr != 0) {
         /* return off our freelist */
+        cout<<"return one:\t"<<p->sl_curr<<endl;
         it = (item *)p->slots;
         p->slots = it->next;
         if (it->next) it->next->prev = 0;
         p->sl_curr--;
-        ret = (void *)it;
+        ret = it;
     }
+    else
+        cout<<"return NULL:\t"<<p->sl_curr<<endl;
     return ret;
 }
 
@@ -108,11 +115,11 @@ int MemcacheSlab::do_slabs_newslab(const unsigned int id)
 
     //grow_slab_list(id);
 
-    ptr = new char(len);
+    ptr = new char[len];
     memset(ptr, 0, len);
 
     split_slab_page_into_freelist(ptr, id);
-    (p->slab_list)[p->slabs++] = (void*)ptr;
+    //p->slab_list[p->slabs++] = (void*)ptr;
 
     return 1;
 }
@@ -120,6 +127,7 @@ int MemcacheSlab::do_slabs_newslab(const unsigned int id)
 void MemcacheSlab::split_slab_page_into_freelist(char *ptr, const unsigned int id)
 {
     struct Slab *p = slabclass[id];
+    cout<<"perslab:\t"<<p->perslab<<endl;
     for (int i = 0; i < p->perslab; i++) {
         do_slabs_free(ptr, 0, id);
         ptr += p->size;
@@ -128,7 +136,7 @@ void MemcacheSlab::split_slab_page_into_freelist(char *ptr, const unsigned int i
 
 void MemcacheSlab::do_slabs_free(void *ptr, const size_t size, unsigned int id)
 {
-    if (id < POWER_SMALLEST || id > POWER_LAGEST)
+    if (id < POWER_SMALLEST-1 || id > POWER_LAGEST)
         return;
 
     struct Slab *p = slabclass[id];
@@ -137,12 +145,13 @@ void MemcacheSlab::do_slabs_free(void *ptr, const size_t size, unsigned int id)
 
     //insert ptr in the header of list
     item* it = (struct item*)ptr;
-    it->prev = 0;
+    it->prev = NULL;
     it->next = (item*)p->slots;
     if (it->next)
         it->next->prev = it;
     p->slots = it;
     p->sl_curr += 1;
+
 }
 
 int MemcacheSlab::grow_slab_list(const unsigned int id)
@@ -166,14 +175,14 @@ int MemcacheSlab::grow_slab_list(const unsigned int id)
 
 unsigned int MemcacheSlab::slabclass_id(const size_t size)
 {
-    int res = POWER_SMALLEST;
+    int res = POWER_SMALLEST-1;
 
     if (size == 0)
         return 0;
 
     while(size > slabclass[res]->size) {
         if (res++ == power_largest)
-            return 0;
+            return -1;
     }
 
     cout<<"get slab id:\t"<<res<<endl;

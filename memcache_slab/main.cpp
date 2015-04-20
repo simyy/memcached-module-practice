@@ -16,7 +16,7 @@ int main(int argc, char** argv)
     ms->init(0);
 
     int flag = 0;
-    flag = ms->do_item_alloc("123", "123123");
+    flag = ms->do_item_alloc("12312111111111113");
     cout<<flag<<endl;
 
     delete  ms;

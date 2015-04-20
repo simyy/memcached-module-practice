@@ -17,7 +17,7 @@ const int POWER_LAGEST =  10;
 const int POWER_SMALLEST =  1;
 
 //the max size of item is 2M, and other's size is 2M/(factor^n)
-const int ITEM_MAX_SIZE = 2048; 
+const int ITEM_MAX_SIZE = 256*1024; 
 
 #define MAX_NUMBER_OF_SLAB_CLASSES (POWER_LAGEST+1)
 
@@ -46,8 +46,7 @@ struct item {
     //rel_time_t time;        //least rencent access
     //rel_time_t exptime;     //expire time
 
-    char* key;
-    void* data;
+    char data[];
 };
 
 class MemcacheSlab
@@ -59,7 +58,7 @@ public:
     /* init slab chunk size and slab factor */
     void init(int prealloc=0);
     /* alloc a item  */
-    int do_item_alloc(char* key, char* data);
+    int do_item_alloc(char* data);
 
 protected:
     /* alloc a size item */
