@@ -31,3 +31,4 @@ Memecached memory module, contais memory_allocate and delete.
 * factor
 * slab list
 * split mem
+* alloc item
