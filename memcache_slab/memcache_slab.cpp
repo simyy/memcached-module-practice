@@ -25,6 +25,20 @@ MemcacheSlab::~MemcacheSlab()
 {
     if (mem_base != NULL)
         delete mem_base;
+
+    for (int i = slabclass.size() - 1; i >= 0; i--) {
+        Slab* p = slabclass[i];
+        slabclass.pop_back();
+        cout<<"delete slab:\t"<<p->id<<endl;
+        void** q = p->slab_list;
+        for (int j = 0; j < p->slabs; j++) {
+            delete q[j];
+        }
+        delete [] q;
+
+        delete p;
+    }
+    
     cout<<"delete slabs"<<endl;
 }
 
@@ -34,21 +48,26 @@ void MemcacheSlab::init(int prealloc)
     unsigned int size = sizeof(struct item) + m_chunk_size;
 
     cout<<"start init slabs ..."<<endl;
-    while (++i < POWER_LAGEST && size <= ITEM_MAX_SIZE / m_factor) {
+    while (i < POWER_LAGEST && size <= ITEM_MAX_SIZE / m_factor) {
         struct Slab* slab = new Slab; 
+        slab->id = i;
         slab->size = size; 
         slab->perslab = ITEM_MAX_SIZE/size;
         slab->slabs = 0;
         slab->sl_curr = 0;
+        slab->slab_list = new void*[slab->perslab]; 
         slabclass.push_back(slab);
         size = size * m_factor;
+        i++;
     }
 
     struct Slab* slab = new Slab; 
+    slab->id = POWER_LAGEST;
     slab->size = ITEM_MAX_SIZE;
     slab->perslab = 1;
     slab->slabs = 0;
     slab->sl_curr = 0;
+    slab->slab_list = new void*[slab->perslab]; 
     slabclass.push_back(slab);
 
     if (prealloc) {
@@ -69,13 +88,8 @@ int MemcacheSlab::do_item_alloc(char* data)
     int id = slabclass_id(len);
     struct Slab* p = slabclass[id];
 
-    cout<<"item\t"<<sizeof(struct item)<<endl;
-    cout<<"data\t"<<strlen(data)<<endl;
-    cout<<"size\t"<<p->size<<endl;
-
     struct item* m = (struct item*)do_slabs_alloc(len, id);
     memcpy(m->data, data, strlen(data)+1);
-    cout<<"m->data\t"<<m->data<<endl;
     m->next = (struct item*)p->slots;
     ((struct item*)p->slots)->prev = m;
     p->slots = m;
@@ -119,7 +133,7 @@ int MemcacheSlab::do_slabs_newslab(const unsigned int id)
     memset(ptr, 0, len);
 
     split_slab_page_into_freelist(ptr, id);
-    //p->slab_list[p->slabs++] = (void*)ptr;
+    p->slab_list[p->slabs++] = (void*)ptr;
 
     return 1;
 }
@@ -127,7 +141,6 @@ int MemcacheSlab::do_slabs_newslab(const unsigned int id)
 void MemcacheSlab::split_slab_page_into_freelist(char *ptr, const unsigned int id)
 {
     struct Slab *p = slabclass[id];
-    cout<<"perslab:\t"<<p->perslab<<endl;
     for (int i = 0; i < p->perslab; i++) {
         do_slabs_free(ptr, 0, id);
         ptr += p->size;

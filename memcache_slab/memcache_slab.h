@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <iostream>
+#include <time.h>
 using namespace std;
 
 #ifndef _MEMCACHE_SLAB_H
@@ -24,17 +25,18 @@ const int ITEM_MAX_SIZE = 256*1024;
 static const int mem_limit = 512*1024*1024;
 
 struct Slab{
-   unsigned int size;      //size of a item
-   unsigned int perslab;   //how many items per slab
+    unsigned int id;
+    unsigned int size;      //size of a item
+    unsigned int perslab;   //how many items per slab
 
-   void*  slots;           //list of item ptrs
-   unsigned int sl_curr;   //total free items in list
-   unsigned int slabs;     //how many slabs allocated
+    void*  slots;           //list of item ptrs
+    unsigned int sl_curr;   //total free items in list
+    unsigned int slabs;     //how many slabs allocated
 
-   void **slab_list;       //array of slab pointers
-   unsigned int list_size; //size of prev array
+    void **slab_list;       //array of slab pointers
+    unsigned int list_size; //size of prev array
 
-   size_t requested;       //The number of requested bytes 
+    size_t requested;       //The number of requested bytes 
 
 };
 

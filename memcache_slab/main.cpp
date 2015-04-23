@@ -17,7 +17,6 @@ int main(int argc, char** argv)
 
     int flag = 0;
     flag = ms->do_item_alloc("12312111111111113");
-    cout<<flag<<endl;
 
     delete  ms;
 
