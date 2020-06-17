@@ -1,4 +1,4 @@
-## MemcachedModule
+## Memcached Module Practice
 
 There are some modules in memcached, writen in c++.
 
@@ -16,7 +16,7 @@ make
 
 ### memcache_event
 
-Memcached event module, contains a worker and some threads, using libevent and pipe.
+Memcached event module, contains a master listner and multi-threads as worker, using libevent and pipe.
 
 * libevent
 * pipe
